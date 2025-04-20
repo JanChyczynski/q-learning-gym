@@ -5,6 +5,13 @@ from typing import Tuple
 import gym
 import time
 
+import numpy as np
+import csv
+import matplotlib.pyplot as plt
+
+ITERATIONS = 10000
+MOVING_AVG_WINDOW = 10
+
 class QLearner:
     def __init__(self, learning_rate, discount_factor, experiment_rate, discretization_buckets):
         self.learning_rate = learning_rate
@@ -12,7 +19,8 @@ class QLearner:
         self.experiment_rate = experiment_rate
         self.discretization_buckets = discretization_buckets
         self.default_q = 0
-        self.environment = gym.make("CartPole-v1", render_mode="human")
+        self.environment = gym.make("CartPole-v1")
+        # self.environment = gym.make("CartPole-v1", render_mode="human")
         self.attempt_no = 1
         self.upper_bounds = [
             self.environment.observation_space.high[0],
@@ -29,9 +37,12 @@ class QLearner:
         self.q_dict = {}
 
     def learn(self, max_attempts):
-        for _ in range(max_attempts):
+        rewards = [0] * max_attempts
+        for i in range(max_attempts):
             reward_sum = self.attempt()
             print(reward_sum)
+            rewards[i] = reward_sum
+        return rewards
 
     def attempt(self):
         observation = self.discretise(self.environment.reset()[0])
@@ -79,10 +90,76 @@ class QLearner:
         else:
             self.q_dict[(tuple(observation), action)] = new_q
 
-def main():
-    learner = QLearner(0.5, 0.5, 0.5, 4)
-    learner.learn(10000)
+def moving_average(arr, window_size):
+    return np.convolve(arr, np.ones(window_size)/window_size, mode='valid')
 
+def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discretization_buckets):
+    results = []
+    for _ in range(experiments):
+        learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets)
+        results.append(learner.learn(ITERATIONS))
+    results = np.array(results).reshape(ITERATIONS, -1)
+    avg = np.average(results, axis=1)
+    std = np.std(results, axis=1)
+
+    filename = f"data_lr{learning_rate}_df{discount_factor}_er{experiment_rate}_b{discretization_buckets}.csv"
+    with open(filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["avg", "std"])
+        for a, s in zip(avg, std):
+            writer.writerow([a, s])
+
+    return filename, avg, std
+
+def plot_all(datasets):
+    plt.figure(figsize=(12, 6))
+    for label, avg, std in datasets:
+        x = np.arange(len(avg))
+        ma = moving_average(avg, MOVING_AVG_WINDOW)
+        std_ma = moving_average(std, MOVING_AVG_WINDOW)
+        x_ma = np.arange(len(ma))
+
+        plt.plot(x_ma, ma, label=label, linewidth=2)
+        plt.plot(x_ma, ma + std_ma, linestyle='--', linewidth=1, alpha=0.5)
+        plt.plot(x_ma, ma - std_ma, linestyle='--', linewidth=1, alpha=0.5)
+
+    plt.title("Średnie wyniki z korytarzem odchyleń")
+    plt.xlabel("Iteracja")
+    plt.ylabel("Średnia nagroda")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    # Zbiorczy wykres tylko średnich
+    plt.figure(figsize=(10, 5))
+    for label, avg, _ in datasets:
+        ma = moving_average(avg, MOVING_AVG_WINDOW)
+        x_ma = np.arange(len(ma))
+        plt.plot(x_ma, ma, label=label, linewidth=2)
+
+    plt.title("Zbiorczy wykres średnich")
+    plt.xlabel("Iteracja")
+    plt.ylabel("Średnia nagroda")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def main():
+    param_sets = [
+        (0.5, 0.5, 0.5, 3),
+        (0.5, 0.5, 0.5, 4),
+        (0.5, 0.5, 0.5, 5),
+        (0.3, 0.5, 0.5, 4),
+        (0.8, 0.5, 0.5, 4),
+    ]
+
+    datasets = []
+    for lr, df, er, b in param_sets:
+        label = f"lr={lr}, df={df}, er={er}, b={b}"
+        filename, avg, std = gen_data(5, lr, df, er, b)
+        datasets.append((label, avg, std))
+
+    plot_all(datasets)
 
 if __name__ == '__main__':
     main()
