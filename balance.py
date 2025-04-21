@@ -9,8 +9,9 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
-ITERATIONS = 10000
-MOVING_AVG_WINDOW = 10
+ITERATIONS = 3000
+MOVING_AVG_WINDOW = 900
+
 
 class QLearner:
     def __init__(self, learning_rate, discount_factor, experiment_rate, discretization_buckets):
@@ -40,8 +41,15 @@ class QLearner:
         rewards = [0] * max_attempts
         for i in range(max_attempts):
             reward_sum = self.attempt()
-            print(reward_sum)
             rewards[i] = reward_sum
+
+        tail = rewards[-100:]
+        avg_tail = np.mean(tail)
+        std_tail = np.std(tail)
+        print(f"Params: lr={self.learning_rate}, df={self.discount_factor},"
+            f"er={self.experiment_rate}, b={self.discretization_buckets}",
+            f"=> avg: {avg_tail:.2f}, std: {std_tail:.2f}")
+
         return rewards
 
     def attempt(self):
@@ -61,7 +69,7 @@ class QLearner:
         return reward_sum
 
     def discretise(self, observation):
-        return [round((val - low)/(up-low) * (self.discretization_buckets-1))
+        return [round((val - low) / (up - low) * (self.discretization_buckets - 1))
                 for val, low, up in zip(observation, self.lower_bounds, self.upper_bounds)]
 
     def pick_action(self, observation):
@@ -86,12 +94,14 @@ class QLearner:
         new_q = reward + self.discount_factor * self.best_action(new_observation)[1]
         if (tuple(observation), action) in self.q_dict.keys():
             old_q = self.q_dict.get((tuple(observation), action), self.default_q)
-            self.q_dict[(tuple(observation), action)] = (1-self.learning_rate) * old_q + self.learning_rate * new_q
+            self.q_dict[(tuple(observation), action)] = (1 - self.learning_rate) * old_q + self.learning_rate * new_q
         else:
             self.q_dict[(tuple(observation), action)] = new_q
 
+
 def moving_average(arr, window_size):
-    return np.convolve(arr, np.ones(window_size)/window_size, mode='valid')
+    return np.convolve(arr, np.ones(window_size) / window_size, mode='valid')
+
 
 def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discretization_buckets):
     results = []
@@ -109,7 +119,17 @@ def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discr
         for a, s in zip(avg, std):
             writer.writerow([a, s])
 
-    return filename, avg, std
+
+def read_data(learning_rate, discount_factor, experiment_rate, discretization_buckets):
+    filename = f"data_lr{learning_rate}_df{discount_factor}_er{experiment_rate}_b{discretization_buckets}.csv"
+    avg, std = [], []
+    with open(filename, newline='') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            avg.append(float(row["avg"]))
+            std.append(float(row["std"]))
+    return filename, np.array(avg), np.array(std)
+
 
 def plot_all(datasets):
     plt.figure(figsize=(12, 6))
@@ -144,22 +164,33 @@ def plot_all(datasets):
     plt.grid(True)
     plt.show()
 
+
 def main():
     param_sets = [
-        (0.5, 0.5, 0.5, 3),
-        (0.5, 0.5, 0.5, 4),
-        (0.5, 0.5, 0.5, 5),
-        (0.3, 0.5, 0.5, 4),
-        (0.8, 0.5, 0.5, 4),
+        (0.5, 0.5, 0.15, 3),
+        (0.5, 0.5, 0.15, 4),
+        (0.5, 0.5, 0.15, 5),
+        (0.3, 0.5, 0.15, 4),
+        (0.8, 0.5, 0.15, 4),
+        (0.8, 0.3, 0.15, 4),
+        (0.8, 0.8, 0.15, 4),
+        (0.8, 0.3, 0.15, 5),
+        (0.8, 0.8, 0.15, 5),
     ]
 
+    # Generate data files (run this once, then comment out if not needed)
+    # for lr, df, er, b in param_sets:
+    #     gen_data(10, lr, df, er, b)
+
+    # Read data for visualization
     datasets = []
     for lr, df, er, b in param_sets:
         label = f"lr={lr}, df={df}, er={er}, b={b}"
-        filename, avg, std = gen_data(5, lr, df, er, b)
+        _, avg, std = read_data(lr, df, er, b)
         datasets.append((label, avg, std))
 
     plot_all(datasets)
+
 
 if __name__ == '__main__':
     main()
