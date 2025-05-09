@@ -9,19 +9,22 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
-ITERATIONS = 3000
-MOVING_AVG_WINDOW = 900
+ITERATIONS = 6000
+MOVING_AVG_WINDOW = 500
 
 
 class QLearner:
-    def __init__(self, learning_rate, discount_factor, experiment_rate, discretization_buckets):
+    def __init__(self, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay):
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.experiment_rate = experiment_rate
         self.discretization_buckets = discretization_buckets
+        self.lr_min = lr_min
+        self.er_min = er_min
+        self.lr_decay = lr_decay
+        self.er_decay = er_decay
         self.default_q = 0
         self.environment = gym.make("CartPole-v1")
-        # self.environment = gym.make("CartPole-v1", render_mode="human")
         self.attempt_no = 1
         self.upper_bounds = [
             self.environment.observation_space.high[0],
@@ -42,13 +45,14 @@ class QLearner:
         for i in range(max_attempts):
             reward_sum = self.attempt()
             rewards[i] = reward_sum
+            self.learning_rate = max(self.lr_min, self.learning_rate * self.lr_decay)
+            self.experiment_rate = max(self.er_min, self.experiment_rate * self.er_decay)
 
         tail = rewards[-100:]
         avg_tail = np.mean(tail)
         std_tail = np.std(tail)
-        print(f"Params: lr={self.learning_rate}, df={self.discount_factor},"
-            f"er={self.experiment_rate}, b={self.discretization_buckets}",
-            f"=> avg: {avg_tail:.2f}, std: {std_tail:.2f}")
+        print(
+            f"Params: lr={self.learning_rate:.4f}, df={self.discount_factor}, er={self.experiment_rate:.4f}, b={self.discretization_buckets} => avg: {avg_tail:.2f}, std: {std_tail:.2f}")
 
         return rewards
 
@@ -57,10 +61,8 @@ class QLearner:
         done = False
         reward_sum = 0.0
         while not done:
-            # self.environment.render()
             action = self.pick_action(observation)
             new_observation, reward, done, truncated, info = self.environment.step(action)
-
             new_observation = self.discretise(new_observation)
             self.update_knowledge(action, observation, new_observation, reward)
             observation = new_observation
@@ -98,30 +100,30 @@ class QLearner:
         else:
             self.q_dict[(tuple(observation), action)] = new_q
 
-
 def moving_average(arr, window_size):
     return np.convolve(arr, np.ones(window_size) / window_size, mode='valid')
 
+def compute_decay_rate(start_value, end_value, target_iterations):
+    return (end_value / start_value) ** (1 / target_iterations)
 
-def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discretization_buckets):
+def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay):
     results = []
     for _ in range(experiments):
-        learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets)
+        learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay)
         results.append(learner.learn(ITERATIONS))
     results = np.array(results).reshape(ITERATIONS, -1)
     avg = np.average(results, axis=1)
     std = np.std(results, axis=1)
 
-    filename = f"data_lr{learning_rate}_df{discount_factor}_er{experiment_rate}_b{discretization_buckets}.csv"
+    filename = f"data_lr{learning_rate}_lrmin{lr_min}_lrdec{lr_decay}_df{discount_factor}_er{experiment_rate}_ermin{er_min}_erdec{er_decay}_b{discretization_buckets}.csv"
     with open(filename, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["avg", "std"])
         for a, s in zip(avg, std):
             writer.writerow([a, s])
 
-
-def read_data(learning_rate, discount_factor, experiment_rate, discretization_buckets):
-    filename = f"data_lr{learning_rate}_df{discount_factor}_er{experiment_rate}_b{discretization_buckets}.csv"
+def read_data(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay):
+    filename = f"data_lr{learning_rate}_lrmin{lr_min}_lrdec{lr_decay}_df{discount_factor}_er{experiment_rate}_ermin{er_min}_erdec{er_decay}_b{discretization_buckets}.csv"
     avg, std = [], []
     with open(filename, newline='') as file:
         reader = csv.DictReader(file)
@@ -130,28 +132,28 @@ def read_data(learning_rate, discount_factor, experiment_rate, discretization_bu
             std.append(float(row["std"]))
     return filename, np.array(avg), np.array(std)
 
-
 def plot_all(datasets):
-    plt.figure(figsize=(12, 6))
     for label, avg, std in datasets:
+        plt.figure(figsize=(12, 8))
         x = np.arange(len(avg))
         ma = moving_average(avg, MOVING_AVG_WINDOW)
         std_ma = moving_average(std, MOVING_AVG_WINDOW)
         x_ma = np.arange(len(ma))
 
         plt.plot(x_ma, ma, label=label, linewidth=2)
-        plt.plot(x_ma, ma + std_ma, linestyle='--', linewidth=1, alpha=0.5)
-        plt.plot(x_ma, ma - std_ma, linestyle='--', linewidth=1, alpha=0.5)
+        plt.plot(x_ma, ma + std_ma, linestyle='--', linewidth=1, alpha=0.5, color='gray')
+        plt.plot(x_ma, ma - std_ma, linestyle='--', linewidth=1, alpha=0.5, color='gray')
 
-    plt.title("Średnie wyniki z korytarzem odchyleń")
-    plt.xlabel("Iteracja")
-    plt.ylabel("Średnia nagroda")
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+        plt.title("Średnie wyniki z korytarzem odchyleń")
+        plt.xlabel("Iteracja")
+        plt.ylabel("Średnia nagroda")
+        plt.grid(True)
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
+        plt.tight_layout()
+        plt.show()
 
     # Zbiorczy wykres tylko średnich
-    plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(10, 10))
     for label, avg, _ in datasets:
         ma = moving_average(avg, MOVING_AVG_WINDOW)
         x_ma = np.arange(len(ma))
@@ -160,33 +162,32 @@ def plot_all(datasets):
     plt.title("Zbiorczy wykres średnich")
     plt.xlabel("Iteracja")
     plt.ylabel("Średnia nagroda")
-    plt.legend()
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
     plt.grid(True)
+    plt.tight_layout()
     plt.show()
-
 
 def main():
     param_sets = [
-        (0.5, 0.5, 0.15, 3),
-        (0.5, 0.5, 0.15, 4),
-        (0.5, 0.5, 0.15, 5),
-        (0.3, 0.5, 0.15, 4),
-        (0.8, 0.5, 0.15, 4),
-        (0.8, 0.3, 0.15, 4),
-        (0.8, 0.8, 0.15, 4),
-        (0.8, 0.3, 0.15, 5),
-        (0.8, 0.8, 0.15, 5),
+        (0.95, 0.3, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+        (0.95, 0.5, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+        (0.95, 0.8, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+        (0.95, 0.3, 0.9, 4, 0.2, 0.01, 0.999, 0.999),
+        (0.95, 0.5, 0.9, 4, 0.2, 0.01, 0.999, 0.999),
+        (0.95, 0.8, 0.9, 4, 0.2, 0.01, 0.999, 0.999),
+        (0.95, 0.3, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+        (0.95, 0.5, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+        (0.95, 0.8, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
     ]
-
     # Generate data files (run this once, then comment out if not needed)
-    # for lr, df, er, b in param_sets:
-    #     gen_data(10, lr, df, er, b)
+    # for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
+    #     gen_data(20, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
 
     # Read data for visualization
     datasets = []
-    for lr, df, er, b in param_sets:
-        label = f"lr={lr}, df={df}, er={er}, b={b}"
-        _, avg, std = read_data(lr, df, er, b)
+    for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
+        label = f"lr={lr}, df={df}, er={er}, b={b}, lr_min={lr_min}, er_min={er_min}"
+        _, avg, std = read_data(lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
         datasets.append((label, avg, std))
 
     plot_all(datasets)
