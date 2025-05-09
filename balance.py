@@ -9,8 +9,8 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
-ITERATIONS = 6000
-MOVING_AVG_WINDOW = 500
+ITERATIONS = 100
+MOVING_AVG_WINDOW = 5
 
 
 class QLearner:
@@ -24,7 +24,8 @@ class QLearner:
         self.lr_decay = lr_decay
         self.er_decay = er_decay
         self.default_q = 0
-        self.environment = gym.make("CartPole-v1")
+        self.environment = gym.make("CartPole-v1", render_mode="human")
+        # self.environment = gym.make("CartPole-v1", render_mode="human")
         self.attempt_no = 1
         self.upper_bounds = [
             self.environment.observation_space.high[0],
@@ -168,20 +169,27 @@ def plot_all(datasets):
     plt.show()
 
 def main():
+    # param_sets = [
+    #     (0.95, 0.3, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+    #     (0.95, 0.5, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+    #     (0.95, 0.8, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+    #     (0.95, 0.3, 0.9, 4, 0.2, 0.01, 0.999, 0.999),
+    #     (0.95, 0.5, 0.9, 4, 0.2, 0.01, 0.999, 0.999),
+    #     (0.95, 0.8, 0.9, 4, 0.2, 0.01, 0.999, 0.999),
+    #     (0.95, 0.3, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+    #     (0.95, 0.5, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+    #     (0.95, 0.8, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+    # ]
     param_sets = [
-        (0.95, 0.3, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
-        (0.95, 0.5, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
-        (0.95, 0.8, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
-        (0.95, 0.3, 0.9, 4, 0.2, 0.01, 0.999, 0.999),
-        (0.95, 0.5, 0.9, 4, 0.2, 0.01, 0.999, 0.999),
-        (0.95, 0.8, 0.9, 4, 0.2, 0.01, 0.999, 0.999),
-        (0.95, 0.3, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
-        (0.95, 0.5, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
-        (0.95, 0.8, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+        (0.96, 0.8, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+        (0.96, 0.8, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+        (0, 0.99, 1, 5, 0, 1, 0.999, 0.999),
     ]
     # Generate data files (run this once, then comment out if not needed)
-    # for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
-    #     gen_data(20, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
+    print("Write anything to generate data")
+    print(input())
+    for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
+        gen_data(1, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
 
     # Read data for visualization
     datasets = []
