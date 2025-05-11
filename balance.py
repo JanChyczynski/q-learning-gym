@@ -41,7 +41,19 @@ class QLearner:
         ]
         self.q_dict = {}
 
+    def qdict_histograms(self, iterations, tail_reward_avg, name):
+        q_values = list(self.q_dict.values())
+        plt.figure(figsize=(10, 5))
+        plt.hist(q_values, bins=50, alpha=0.7, color='blue')
+        plt.title(f"Wartości Q: {name} | i={iterations}, tail avg={tail_reward_avg}")
+        plt.xlabel("Wartość Q")
+        plt.ylabel("Liczba wystąpień")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
     def learn(self, max_attempts):
+        name = f"Params: lr={self.learning_rate:.4f}, df={self.discount_factor}, er={self.experiment_rate:.4f}, b={self.discretization_buckets}"
         print(
             f"Params: lr={self.learning_rate:.4f}, df={self.discount_factor}, er={self.experiment_rate:.4f}, b={self.discretization_buckets}: STARTING ")
         rewards = [0] * max_attempts
@@ -50,17 +62,29 @@ class QLearner:
         for i in range(max_attempts):
             reward_sum = self.attempt()
             rewards[i] = reward_sum
-            if i > 1:
+
+            if i > 50:
+                if i % 50 == 0 or 1980 < i < 2030:
+                    print(f"i: {i}, avg tail: {tail_rewards_avg}, std: {tail_rewards_std}, current rew: {reward_sum}" )
+
                 tail_rewards = rewards[max(0, i - 20):i]
                 tail_rewards_avg = np.mean(tail_rewards)
                 tail_rewards_std = np.std(tail_rewards)
                 if tail_rewards_avg < 50 and cooldown_low == 0:
                     print(i, "LOW tail_rewards_avg < 30., tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    cooldown_low = 200
-
-                if tail_rewards_avg > 350 and cooldown_high == 0:
+                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+                    cooldown_low = 400
+                    cooldown_high = 0
+                elif tail_rewards_avg > 350 and cooldown_high == 0:
                     print(i, "HIGH tail_rewards_avg > 350, tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    cooldown_high = 200
+                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+                    cooldown_high = 400
+                    cooldown_low = 0
+                elif i == 2025:
+                    print(i, "2025 tail_rewards_avg ???, tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
+                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+
+
             cooldown_low = max(0, cooldown_low -1)
             cooldown_high = max(0, cooldown_high -1)
             self.learning_rate = max(self.lr_min, self.learning_rate * self.lr_decay)
@@ -91,9 +115,6 @@ class QLearner:
         return reward_sum
 
     def discretise(self, observation):
-        # return [round((val - low) / (up - low) * (self.discretization_buckets - 1))
-        #         for val, low, up in zip(observation, self.lower_bounds, self.upper_bounds)]
-
         scaled = [(val - low) / (up - low) for val, low, up in zip(observation, self.lower_bounds, self.upper_bounds)]
         clipped = [np.clip(s, 0, 1) for s in scaled]
         return [int(round(c * (self.discretization_buckets - 1))) for c in clipped]
@@ -192,7 +213,6 @@ def plot_all(datasets):
     plt.show()
 
 def main():
-
     param_sets = [
 
         # (0.05, 1.0, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
@@ -201,12 +221,12 @@ def main():
         # (0.1, 1.0, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
         # (0.05, 0.995, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
         # (0.05, 0.995, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
-        (0.1, 0.995, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
+        (0.1, 0.99499, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
         # (0.1, 0.995, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
         # (0.05, 0.99, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
         # (0.05, 0.99, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
         # (0.1, 0.99, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
-        (0.1, 0.99, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
+        # (0.1, 0.99, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
 
         # (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999),
         # (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999),
@@ -219,14 +239,14 @@ def main():
         # (0.1, 0.95, 0.9, 9, 0.001, 0.01, 0.999, 0.999),
         # (0.1, 0.95, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
 
-        (0, 1, 1, 5, 0, 1, 0.999, 0.999),
+        # (0, 1, 1, 5, 0, 1, 0.999, 0.999),
     ]
 
     # Generate data files (run this once, then comment out if not needed)
     print("Write anything to generate data")
     print(input())
     for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
-        gen_data(3, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
+        gen_data(2, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
 
     # Read data for visualization
     datasets = []
