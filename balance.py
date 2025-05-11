@@ -9,8 +9,8 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
-ITERATIONS = 100
-MOVING_AVG_WINDOW = 5
+ITERATIONS = 4000
+MOVING_AVG_WINDOW = 200
 
 
 class QLearner:
@@ -24,7 +24,7 @@ class QLearner:
         self.lr_decay = lr_decay
         self.er_decay = er_decay
         self.default_q = 0
-        self.environment = gym.make("CartPole-v1", render_mode="human")
+        self.environment = gym.make("CartPole-v1", render_mode=None)
         # self.environment = gym.make("CartPole-v1", render_mode="human")
         self.attempt_no = 1
         self.upper_bounds = [
@@ -55,13 +55,15 @@ class QLearner:
         print(
             f"Params: lr={self.learning_rate:.4f}, df={self.discount_factor}, er={self.experiment_rate:.4f}, b={self.discretization_buckets} => avg: {avg_tail:.2f}, std: {std_tail:.2f}")
 
+        self.environment.reset()
         return rewards
 
     def attempt(self):
         observation = self.discretise(self.environment.reset()[0])
         done = False
-        reward_sum = 0.0
-        while not done:
+        reward_sum = 0.
+        truncated = False
+        while not (done or truncated):
             action = self.pick_action(observation)
             new_observation, reward, done, truncated, info = self.environment.step(action)
             new_observation = self.discretise(new_observation)
@@ -72,8 +74,12 @@ class QLearner:
         return reward_sum
 
     def discretise(self, observation):
-        return [round((val - low) / (up - low) * (self.discretization_buckets - 1))
-                for val, low, up in zip(observation, self.lower_bounds, self.upper_bounds)]
+        # return [round((val - low) / (up - low) * (self.discretization_buckets - 1))
+        #         for val, low, up in zip(observation, self.lower_bounds, self.upper_bounds)]
+
+        scaled = [(val - low) / (up - low) for val, low, up in zip(observation, self.lower_bounds, self.upper_bounds)]
+        clipped = [np.clip(s, 0, 1) for s in scaled]
+        return [int(round(c * (self.discretization_buckets - 1))) for c in clipped]
 
     def pick_action(self, observation):
         if random() > self.experiment_rate:
@@ -179,17 +185,49 @@ def main():
     #     (0.95, 0.3, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
     #     (0.95, 0.5, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
     #     (0.95, 0.8, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+    #     (0, 1, 1, 5, 0, 1, 0.999, 0.999),
     # ]
     param_sets = [
-        (0.96, 0.8, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
-        (0.96, 0.8, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
-        (0, 0.99, 1, 5, 0, 1, 0.999, 0.999),
+        (0.0001, 1, 0.9, 7, 0.000001, 0.01, 0.999, 0.999),
+        (0.0001, 1, 0.9, 5, 0.000001, 0.01, 0.999, 0.999),
+        (0.00001, 1, 0.9, 3, 0.00001, 0.01, 0.999, 0.999),
+        (0.00001, 1, 0.9, 5, 0.00001, 0.01, 0.999, 0.999),
+        (0.00001, 1, 0.9, 7, 0.00001, 0.01, 0.999, 0.999),
+        (0.0001, 1, 0.9, 7, 0.0001, 0.01, 0.999, 0.999),
+        (0.0001, 1, 0.9, 5, 0.0001, 0.01, 0.999, 0.999),
+        (0.001, 1, 0.9, 3, 0.001, 0.01, 0.999, 0.999),
+        (0.001, 1, 0.9, 5, 0.001, 0.01, 0.999, 0.999),
+        (0.001, 0.97, 0.9, 5, 0.001, 0.01, 0.999, 0.999),
+        (0.001, 1, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
+        (0.001, 1, 0.9, 9, 0.001, 0.01, 0.999, 0.999),
+        (0.05, 1, 0.9, 5, 0.05, 0.01, 0.999, 0.999),
+        (0.05, 1, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
+        (0, 1, 1, 5, 0, 1, 0.999, 0.999),
     ]
+    # param_sets = [
+    #     (0.001, 1, 0.9, 5, 0.001, 0.01, 0.999, 0.999),
+    #     (0.001, 1, 0.9, 3, 0.001, 0.01, 0.999, 0.999),
+    #     (0.05, 1, 0.9, 5, 0.05, 0.01, 0.999, 0.999),
+    #     (0.05, 1, 0.9, 3, 0.05, 0.01, 0.999, 0.999),
+    #     (0.05, 1, 0.9, 5, 0.05, 0.01, 0.999, 0.999),
+    #     (0.2, 1, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+    #     # (0.2, 0.99, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+    #     # (0.2, 0.99, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+    #     # (0.96, 0.99, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+    #     (0.96, 1, 0.9, 5, 0.001, 0.01, 0.999, 0.999),
+    #     (0.96, 1, 0.9, 5, 0.001, 0.01, 0.999, 0.999),
+    #     (0.96, 1, 0.9, 3, 0.001, 0.01, 0.999, 0.999),
+    #     # (0.96, 0.95, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+    #     # (0.96, 0.95, 0.9, 5, 0.2, 0.01, 0.999, 0.999),
+    #     # (0.96, 0.8, 0.9, 3, 0.2, 0.01, 0.999, 0.999),
+    #     (0.96, 0.8, 0.9, 5, 0.001, 0.01, 0.999, 0.999),
+    #     (0, 1, 1, 5, 0, 1, 0.999, 0.999),
+    # ]
     # Generate data files (run this once, then comment out if not needed)
     print("Write anything to generate data")
     print(input())
     for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
-        gen_data(1, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
+        gen_data(2, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
 
     # Read data for visualization
     datasets = []
