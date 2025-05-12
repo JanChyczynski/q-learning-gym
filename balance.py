@@ -9,12 +9,12 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
-ITERATIONS = 4000
-MOVING_AVG_WINDOW = 200
-
+ITERATIONS = 1000
+MOVING_AVG_WINDOW = 50
+SARSA = True
 
 class QLearner:
-    def __init__(self, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay):
+    def __init__(self, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa):
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.experiment_rate = experiment_rate
@@ -39,7 +39,10 @@ class QLearner:
             self.environment.observation_space.low[2],
             -math.radians(50)
         ]
+        self.sarsa = sarsa
         self.q_dict = {}
+        self.prev_action = None
+        self.prev_observation = None
 
     def qdict_histograms(self, iterations, tail_reward_avg, name):
         q_values = list(self.q_dict.values())
@@ -107,9 +110,14 @@ class QLearner:
             action = self.pick_action(observation)
             new_observation, reward, done, truncated, info = self.environment.step(action)
             new_observation = self.discretise(new_observation)
-            self.update_knowledge(action, observation, new_observation, reward)
+            if not self.sarsa:
+                self.update_knowledge(action, observation, new_observation, reward)
+            elif self.prev_action is not None and self.prev_action is not None:
+                self.SARSA_update_knowledge(self.prev_action, action, self.prev_observation, new_observation, reward)
             observation = new_observation
             reward_sum += reward
+            self.prev_action = action
+            self.prev_observation = new_observation
         self.attempt_no += 1
         return reward_sum
 
@@ -136,6 +144,12 @@ class QLearner:
         assert best_action is not None
         return best_action, best_q
 
+    def SARSA_update_knowledge(self, prev_action, action, prev_observation, observation, reward):
+        old_past_q = self.q_dict.get((tuple(prev_observation), prev_action), self.default_q)
+        current_q = self.q_dict.get((tuple(observation), action), self.default_q)
+        new_past_q = old_past_q + self.learning_rate * (reward + self.discount_factor * current_q - old_past_q)
+        self.q_dict[(tuple(prev_observation), prev_action)] = new_past_q
+
     def update_knowledge(self, action, observation, new_observation, reward):
         new_q = reward + self.discount_factor * self.best_action(new_observation)[1]
         if (tuple(observation), action) in self.q_dict.keys():
@@ -155,7 +169,7 @@ def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discr
     results = []
     # results_backup = []
     for _ in range(experiments):
-        learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay)
+        learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa=SARSA)
         curr_result = learner.learn(ITERATIONS)
         results.append(curr_result)
         # results_backup.append(curr_result.copy())
@@ -232,16 +246,16 @@ def main():
         # (0.1, 0.99, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
         # (0.1, 0.99, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
 
-        (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999),
-        (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999),
-        (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
+        # (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999),
+        # (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999),
+        # (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
+        # (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
         (0.2, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        (0.2, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
-
-        (0.1, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        (0.1, 0.995, 0.9, 9, 0.001, 0.01, 0.999, 0.999),
-        (0.1, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
+        # (0.2, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
+        #
+        # (0.1, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
+        # (0.1, 0.995, 0.9, 9, 0.001, 0.01, 0.999, 0.999),
+        # (0.1, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
 
         # (0, 1, 1, 5, 0, 1, 0.999, 0.999),
     ]
