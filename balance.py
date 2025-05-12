@@ -1,17 +1,18 @@
 import math
 from random import random
-from typing import Tuple
 
 import gym
-import time
+import os
+from datetime import datetime
 
 import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
-ITERATIONS = 1000
-MOVING_AVG_WINDOW = 50
+ITERATIONS = 4000
+MOVING_AVG_WINDOW = 200
 SARSA = True
+
 
 class QLearner:
     def __init__(self, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa):
@@ -25,7 +26,6 @@ class QLearner:
         self.er_decay = er_decay
         self.default_q = 0
         self.environment = gym.make("CartPole-v1", render_mode=None)
-        # self.environment = gym.make("CartPole-v1", render_mode="human")
         self.attempt_no = 1
         self.upper_bounds = [
             self.environment.observation_space.high[0],
@@ -66,26 +66,19 @@ class QLearner:
             reward_sum = self.attempt()
             rewards[i] = reward_sum
             if i > 50:
-                # if i % 50 == 0 or 1980 < i < 2030:
-                #     print(f"i: {i}, avg tail: {tail_rewards_avg}, std: {tail_rewards_std}, current rew: {reward_sum}" )
-
                 tail_rewards = rewards[max(0, i - 20):i]
                 tail_rewards_avg = np.mean(tail_rewards)
                 tail_rewards_std = np.std(tail_rewards)
                 if tail_rewards_avg < 50 and cooldown_low == 0:
                     print(i, "LOW tail_rewards_avg < 30., tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    # self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
                     cooldown_low = 400
                     cooldown_high = 0
                 elif tail_rewards_avg > 350 and cooldown_high == 0:
                     print(i, "HIGH tail_rewards_avg > 350, tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    # self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
                     cooldown_high = 400
                     cooldown_low = 0
-                # elif i == 2025:
-                #     print(i, "2025 tail_rewards_avg ???, tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    # self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
-
 
             cooldown_low = max(0, cooldown_low -1)
             cooldown_high = max(0, cooldown_high -1)
@@ -102,22 +95,27 @@ class QLearner:
         return rewards
 
     def attempt(self):
+        prev_reward = None
+        new_action = None
         observation = self.discretise(self.environment.reset()[0])
         done = False
         reward_sum = 0.
         truncated = False
         while not (done or truncated):
-            action = self.pick_action(observation)
+            action = new_action if new_action is not None else self.pick_action(observation)
             new_observation, reward, done, truncated, info = self.environment.step(action)
             new_observation = self.discretise(new_observation)
+            new_action = self.pick_action(new_observation)
             if not self.sarsa:
-                self.update_knowledge(action, observation, new_observation, reward)
-            elif self.prev_action is not None and self.prev_action is not None:
-                self.SARSA_update_knowledge(self.prev_action, action, self.prev_observation, new_observation, reward)
+                self.update_knowledge(action, observation, new_observation, prev_reward)
+            elif self.prev_action is not None and self.prev_observation is not None:
+                self.SARSA_update_knowledge(action, new_action, observation, new_observation, reward)
+                # self.SARSA_update_knowledge(self.prev_action, action, self.prev_observation, new_observation, reward)
             observation = new_observation
             reward_sum += reward
             self.prev_action = action
             self.prev_observation = new_observation
+            prev_reward = reward
         self.attempt_no += 1
         return reward_sum
 
@@ -165,15 +163,11 @@ def compute_decay_rate(start_value, end_value, target_iterations):
     return (end_value / start_value) ** (1 / target_iterations)
 
 def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay):
-
     results = []
-    # results_backup = []
     for _ in range(experiments):
         learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa=SARSA)
         curr_result = learner.learn(ITERATIONS)
         results.append(curr_result)
-        # results_backup.append(curr_result.copy())
-    # results = np.array(results).reshape(ITERATIONS, -1)
     avg = np.average(results, axis=0)
     std = np.std(results, axis=0)
 
@@ -195,7 +189,12 @@ def read_data(learning_rate, discount_factor, experiment_rate, discretization_bu
     return filename, np.array(avg), np.array(std)
 
 def plot_all(datasets):
-    for label, avg, std in datasets:
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    prefix = "SARSA" if SARSA else "classic"
+    save_dir = f"./plots/{prefix}_{timestamp}"
+    os.makedirs(save_dir, exist_ok=True)
+
+    for idx, (label, avg, std) in enumerate(datasets):
         plt.figure(figsize=(12, 8))
         x = np.arange(len(avg))
         ma = moving_average(avg, MOVING_AVG_WINDOW)
@@ -212,9 +211,12 @@ def plot_all(datasets):
         plt.grid(True)
         plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
         plt.tight_layout()
-        plt.show()
 
-    # Zbiorczy wykres tylko średnich
+        save_path = os.path.join(save_dir, f"{prefix}_plot_{idx}.png")
+        plt.savefig(save_path)
+        plt.show()
+        plt.close()
+
     plt.figure(figsize=(10, 10))
     for label, avg, _ in datasets:
         ma = moving_average(avg, MOVING_AVG_WINDOW)
@@ -227,7 +229,11 @@ def plot_all(datasets):
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
     plt.grid(True)
     plt.tight_layout()
+
+    summary_path = os.path.join(save_dir, f"{prefix}_summary.png")
+    plt.savefig(summary_path)
     plt.show()
+    plt.close()
 
 def main():
     param_sets = [
@@ -241,17 +247,20 @@ def main():
         # (0.05, 0.995, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
         (0.1, 0.995, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
         # (0.1, 0.995, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
-        # (0.05, 0.99, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
+        (0.05, 0.995, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
         # (0.05, 0.99, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
         # (0.1, 0.99, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
         # (0.1, 0.99, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
 
-        # (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999),
-        # (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999),
-        # (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        # (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
+        (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999),
+        (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999),
+        (0.5, 0.995, 0.9, 5, 0.001, 0.01, 0.999, 0.999),
+        (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
+        (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
         (0.2, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        # (0.2, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
+        (0.2, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
+        (0.5, 0.95, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
+        (0.5, 1, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
         #
         # (0.1, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
         # (0.1, 0.995, 0.9, 9, 0.001, 0.01, 0.999, 0.999),
@@ -264,9 +273,8 @@ def main():
     print("Write anything to generate data")
     print(input())
     for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
-        gen_data(2, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
+        gen_data(3, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
 
-    # Read data for visualization
     datasets = []
     for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
         label = f"lr={lr}, df={df}, er={er}, b={b}, lr_min={lr_min}, er_min={er_min}"
