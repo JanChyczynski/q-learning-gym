@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 
 ITERATIONS = 4000
 MOVING_AVG_WINDOW = 200
-SARSA = True
 
 
 class QLearner:
@@ -56,9 +55,9 @@ class QLearner:
         plt.show()
 
     def learn(self, max_attempts):
-        name = f"Params: lr={self.learning_rate:.4f}, df={self.discount_factor}, er={self.experiment_rate:.4f}, b={self.discretization_buckets}"
-        print(
-            f"Params: lr={self.learning_rate:.4f}, df={self.discount_factor}, er={self.experiment_rate:.4f}, b={self.discretization_buckets}: STARTING ")
+        algorithm_type = "SARSA" if self.sarsa else "Classic"
+        name = f"{algorithm_type} Params: lr={self.learning_rate:.4f}, df={self.discount_factor}, er={self.experiment_rate:.4f}, b={self.discretization_buckets}"
+        print(name + ": STARTING")
         rewards = [0] * max_attempts
         cooldown_low = 0
         cooldown_high = 0
@@ -71,12 +70,12 @@ class QLearner:
                 tail_rewards_std = np.std(tail_rewards)
                 if tail_rewards_avg < 50 and cooldown_low == 0:
                     print(i, "LOW tail_rewards_avg < 30., tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+                    self.qdict_histograms(i, tail_rewards_avg, name)
                     cooldown_low = 400
                     cooldown_high = 0
                 elif tail_rewards_avg > 350 and cooldown_high == 0:
                     print(i, "HIGH tail_rewards_avg > 350, tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+                    self.qdict_histograms(i, tail_rewards_avg, name)
                     cooldown_high = 400
                     cooldown_low = 0
 
@@ -88,8 +87,7 @@ class QLearner:
         tail = rewards[-100:]
         avg_tail = np.mean(tail)
         std_tail = np.std(tail)
-        print(
-            f"Params: lr={self.learning_rate:.4f}, df={self.discount_factor}, er={self.experiment_rate:.4f}, b={self.discretization_buckets} => avg: {avg_tail:.2f}, std: {std_tail:.2f}")
+        print(name + f" => avg: {avg_tail:.2f}, std: {std_tail:.2f}")
 
         self.environment.reset()
         return rewards
@@ -162,24 +160,26 @@ def moving_average(arr, window_size):
 def compute_decay_rate(start_value, end_value, target_iterations):
     return (end_value / start_value) ** (1 / target_iterations)
 
-def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay):
+def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa):
     results = []
     for _ in range(experiments):
-        learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa=SARSA)
+        learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa=sarsa)
         curr_result = learner.learn(ITERATIONS)
         results.append(curr_result)
     avg = np.average(results, axis=0)
     std = np.std(results, axis=0)
 
-    filename = f"data_lr{learning_rate}_lrmin{lr_min}_lrdec{lr_decay}_df{discount_factor}_er{experiment_rate}_ermin{er_min}_erdec{er_decay}_b{discretization_buckets}.csv"
+    prefix = "SARSA_" if sarsa else ""
+    filename = f"{prefix}data_lr{learning_rate}_lrmin{lr_min}_lrdec{lr_decay}_df{discount_factor}_er{experiment_rate}_ermin{er_min}_erdec{er_decay}_b{discretization_buckets}.csv"
     with open(filename, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["avg", "std"])
         for a, s in zip(avg, std):
             writer.writerow([a, s])
 
-def read_data(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay):
-    filename = f"data_lr{learning_rate}_lrmin{lr_min}_lrdec{lr_decay}_df{discount_factor}_er{experiment_rate}_ermin{er_min}_erdec{er_decay}_b{discretization_buckets}.csv"
+def read_data(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa):
+    prefix = "SARSA_" if sarsa else ""
+    filename = f"{prefix}data_lr{learning_rate}_lrmin{lr_min}_lrdec{lr_decay}_df{discount_factor}_er{experiment_rate}_ermin{er_min}_erdec{er_decay}_b{discretization_buckets}.csv"
     avg, std = [], []
     with open(filename, newline='') as file:
         reader = csv.DictReader(file)
@@ -188,9 +188,9 @@ def read_data(learning_rate, discount_factor, experiment_rate, discretization_bu
             std.append(float(row["std"]))
     return filename, np.array(avg), np.array(std)
 
-def plot_all(datasets):
+def plot_all(datasets, sarsa):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    prefix = "SARSA" if SARSA else "classic"
+    prefix = "SARSA" if sarsa else "Classic"
     save_dir = f"./plots/{prefix}_{timestamp}"
     os.makedirs(save_dir, exist_ok=True)
 
@@ -238,51 +238,34 @@ def plot_all(datasets):
 def main():
     param_sets = [
 
-        # (0.001, 1.0, 0.995, 5, 0.05, 0.01, 0.999, 0.999),
-        # (0.05, 1.0, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
-        # (0.05, 1.0, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
-        # (0.1, 1.0, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
-        # (0.1, 1.0, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
-        # (0.05, 0.995, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
-        # (0.05, 0.995, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
-        (0.1, 0.995, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
-        # (0.1, 0.995, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
-        (0.05, 0.995, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
-        # (0.05, 0.99, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
-        # (0.1, 0.99, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
-        # (0.1, 0.99, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
-
-        (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999),
-        (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999),
-        (0.5, 0.995, 0.9, 5, 0.001, 0.01, 0.999, 0.999),
-        (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
-        (0.2, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        (0.2, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
-        (0.5, 0.95, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        (0.5, 1, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        #
-        # (0.1, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        # (0.1, 0.995, 0.9, 9, 0.001, 0.01, 0.999, 0.999),
-        # (0.1, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
-
-        # (0, 1, 1, 5, 0, 1, 0.999, 0.999),
+        # (0.001, 1.0, 0.995, 5, 0.05, 0.01, 0.999, 0.999, True),
+        # (0.05, 1.0, 0.9, 7, 0.05, 0.01, 0.999, 0.999, True),
+        # (0.05, 1.0, 0.9, 11, 0.05, 0.01, 0.999, 0.999, False),
+        (0.1, 0.995, 0.9, 7, 0.1, 0.01, 0.999, 0.999, False),
+        (0.05, 0.995, 0.9, 7, 0.05, 0.01, 0.999, 0.999, True),
+        (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999, True),
+        (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999, False),
+        (0.5, 0.995, 0.9, 5, 0.001, 0.01, 0.999, 0.999, True),
+        (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999, False),
+        (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999, False),
+        (0.2, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999, False),
+        (0.2, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999, True),
+        (0.5, 0.95, 0.9, 7, 0.001, 0.01, 0.999, 0.999, True),
+        (0.5, 1, 0.9, 7, 0.001, 0.01, 0.999, 0.999, False),
     ]
 
-    # Generate data files (run this once, then comment out if not needed)
     print("Write anything to generate data")
     print(input())
-    for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
-        gen_data(3, lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
+    for lr, df, er, b, lr_min, er_min, lr_decay, er_decay, sarsa in param_sets:
+        gen_data(3, lr, df, er, b, lr_min, er_min, lr_decay, er_decay, sarsa)
 
     datasets = []
-    for lr, df, er, b, lr_min, er_min, lr_decay, er_decay in param_sets:
-        label = f"lr={lr}, df={df}, er={er}, b={b}, lr_min={lr_min}, er_min={er_min}"
-        _, avg, std = read_data(lr, df, er, b, lr_min, er_min, lr_decay, er_decay)
+    for lr, df, er, b, lr_min, er_min, lr_decay, er_decay, sarsa in param_sets:
+        label = f"{'SARSA' if sarsa else 'Classic'} lr={lr}, df={df}, er={er}, b={b}, lr_min={lr_min}, er_min={er_min}"
+        _, avg, std = read_data(lr, df, er, b, lr_min, er_min, lr_decay, er_decay, sarsa)
         datasets.append((label, avg, std))
 
-    plot_all(datasets)
-
+    plot_all(datasets, sarsa=False)  # Only used for naming output directory
 
 if __name__ == '__main__':
     main()
