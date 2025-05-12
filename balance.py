@@ -62,27 +62,26 @@ class QLearner:
         for i in range(max_attempts):
             reward_sum = self.attempt()
             rewards[i] = reward_sum
-
             if i > 50:
-                if i % 50 == 0 or 1980 < i < 2030:
-                    print(f"i: {i}, avg tail: {tail_rewards_avg}, std: {tail_rewards_std}, current rew: {reward_sum}" )
+                # if i % 50 == 0 or 1980 < i < 2030:
+                #     print(f"i: {i}, avg tail: {tail_rewards_avg}, std: {tail_rewards_std}, current rew: {reward_sum}" )
 
                 tail_rewards = rewards[max(0, i - 20):i]
                 tail_rewards_avg = np.mean(tail_rewards)
                 tail_rewards_std = np.std(tail_rewards)
                 if tail_rewards_avg < 50 and cooldown_low == 0:
                     print(i, "LOW tail_rewards_avg < 30., tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+                    # self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
                     cooldown_low = 400
                     cooldown_high = 0
                 elif tail_rewards_avg > 350 and cooldown_high == 0:
                     print(i, "HIGH tail_rewards_avg > 350, tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+                    # self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
                     cooldown_high = 400
                     cooldown_low = 0
-                elif i == 2025:
-                    print(i, "2025 tail_rewards_avg ???, tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
-                    self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
+                # elif i == 2025:
+                #     print(i, "2025 tail_rewards_avg ???, tail avg:", tail_rewards_avg, " std:", tail_rewards_std)
+                    # self.qdict_histograms(i, tail_rewards_avg, name)  # call qdict_histograms
 
 
             cooldown_low = max(0, cooldown_low -1)
@@ -152,13 +151,17 @@ def compute_decay_rate(start_value, end_value, target_iterations):
     return (end_value / start_value) ** (1 / target_iterations)
 
 def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay):
+
     results = []
+    # results_backup = []
     for _ in range(experiments):
         learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay)
-        results.append(learner.learn(ITERATIONS))
-    results = np.array(results).reshape(ITERATIONS, -1)
-    avg = np.average(results, axis=1)
-    std = np.std(results, axis=1)
+        curr_result = learner.learn(ITERATIONS)
+        results.append(curr_result)
+        # results_backup.append(curr_result.copy())
+    # results = np.array(results).reshape(ITERATIONS, -1)
+    avg = np.average(results, axis=0)
+    std = np.std(results, axis=0)
 
     filename = f"data_lr{learning_rate}_lrmin{lr_min}_lrdec{lr_decay}_df{discount_factor}_er{experiment_rate}_ermin{er_min}_erdec{er_decay}_b{discretization_buckets}.csv"
     with open(filename, mode='w', newline='') as file:
@@ -215,29 +218,30 @@ def plot_all(datasets):
 def main():
     param_sets = [
 
+        # (0.001, 1.0, 0.995, 5, 0.05, 0.01, 0.999, 0.999),
         # (0.05, 1.0, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
         # (0.05, 1.0, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
         # (0.1, 1.0, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
         # (0.1, 1.0, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
         # (0.05, 0.995, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
         # (0.05, 0.995, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
-        (0.1, 0.99499, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
+        (0.1, 0.995, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
         # (0.1, 0.995, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
         # (0.05, 0.99, 0.9, 7, 0.05, 0.01, 0.999, 0.999),
         # (0.05, 0.99, 0.9, 11, 0.05, 0.01, 0.999, 0.999),
         # (0.1, 0.99, 0.9, 7, 0.1, 0.01, 0.999, 0.999),
         # (0.1, 0.99, 0.9, 11, 0.1, 0.01, 0.999, 0.999),
 
-        # (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999),
-        # (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999),
-        # (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        # (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
-        # (0.2, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        # (0.2, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
+        (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999),
+        (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999),
+        (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
+        (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
+        (0.2, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
+        (0.2, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
 
-        # (0.1, 0.95, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
-        # (0.1, 0.95, 0.9, 9, 0.001, 0.01, 0.999, 0.999),
-        # (0.1, 0.95, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
+        (0.1, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999),
+        (0.1, 0.995, 0.9, 9, 0.001, 0.01, 0.999, 0.999),
+        (0.1, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999),
 
         # (0, 1, 1, 5, 0, 1, 0.999, 0.999),
     ]
