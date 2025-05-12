@@ -105,7 +105,7 @@ class QLearner:
             new_observation = self.discretise(new_observation)
             new_action = self.pick_action(new_observation)
             if not self.sarsa:
-                self.update_knowledge(action, observation, new_observation, prev_reward)
+                self.update_knowledge(action, observation, new_observation, reward)
             elif self.prev_action is not None and self.prev_observation is not None:
                 self.SARSA_update_knowledge(action, new_action, observation, new_observation, reward)
                 # self.SARSA_update_knowledge(self.prev_action, action, self.prev_observation, new_observation, reward)
@@ -241,17 +241,19 @@ def main():
         # (0.001, 1.0, 0.995, 5, 0.05, 0.01, 0.999, 0.999, True),
         # (0.05, 1.0, 0.9, 7, 0.05, 0.01, 0.999, 0.999, True),
         # (0.05, 1.0, 0.9, 11, 0.05, 0.01, 0.999, 0.999, False),
-        (0.1, 0.995, 0.9, 7, 0.1, 0.01, 0.999, 0.999, False),
         (0.05, 0.995, 0.9, 7, 0.05, 0.01, 0.999, 0.999, True),
+        (0.1, 0.995, 0.9, 7, 0.1, 0.01, 0.999, 0.999, True),
         (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999, True),
-        (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999, False),
+        (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999, True),
+        (0.2, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999, True),
         (0.5, 0.995, 0.9, 5, 0.001, 0.01, 0.999, 0.999, True),
-        (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999, False),
-        (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999, False),
-        (0.2, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999, False),
-        (0.2, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999, True),
+        (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999, True),
+        (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999, True),
+
         (0.5, 0.95, 0.9, 7, 0.001, 0.01, 0.999, 0.999, True),
-        (0.5, 1, 0.9, 7, 0.001, 0.01, 0.999, 0.999, False),
+        (0.5, 1, 0.9, 7, 0.001, 0.01, 0.999, 0.999, True),
+
+        (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999, False),
     ]
 
     print("Write anything to generate data")
