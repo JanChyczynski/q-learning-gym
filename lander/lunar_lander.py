@@ -9,8 +9,8 @@ import numpy as np
 import csv
 import matplotlib.pyplot as plt
 
-ITERATIONS = 4000
-MOVING_AVG_WINDOW = 200
+ITERATIONS = 15000
+MOVING_AVG_WINDOW = 800
 
 
 class QLearner:
@@ -64,7 +64,7 @@ class QLearner:
         for i in range(max_attempts):
             reward_sum = self.attempt()
             rewards[i] = reward_sum
-            if i > 50:
+            if False and i > 50:
                 tail_rewards = rewards[max(0, i - 20):i]
                 tail_rewards_avg = np.mean(tail_rewards)
                 tail_rewards_std = np.std(tail_rewards)
@@ -162,10 +162,17 @@ def compute_decay_rate(start_value, end_value, target_iterations):
 
 def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa):
     results = []
+    best_learner = None
+    best_avg_tail = -np.inf
     for _ in range(experiments):
         learner = QLearner(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa=sarsa)
         curr_result = learner.learn(ITERATIONS)
         results.append(curr_result)
+        avg_tail = np.mean(curr_result[-100:])
+        if avg_tail > best_avg_tail:
+            best_avg_tail = avg_tail
+            best_learner = learner
+
     avg = np.average(results, axis=0)
     std = np.std(results, axis=0)
 
@@ -176,6 +183,13 @@ def gen_data(experiments, learning_rate, discount_factor, experiment_rate, discr
         writer.writerow(["avg", "std"])
         for a, s in zip(avg, std):
             writer.writerow([a, s])
+
+    qdict_filename = f"qDict_{prefix}lr{learning_rate}_lrmin{lr_min}_lrdec{lr_decay}_df{discount_factor}_er{experiment_rate}_ermin{er_min}_erdec{er_decay}_b{discretization_buckets}.txt"
+    with open(qdict_filename, mode='w') as f:
+        f.write("{\n")
+        for key, value in best_learner.q_dict.items():
+            f.write(f"  {key}: {value},\n")
+        f.write("}\n")
 
 def read_data(learning_rate, discount_factor, experiment_rate, discretization_buckets, lr_min, er_min, lr_decay, er_decay, sarsa):
     prefix = "SARSA_" if sarsa else ""
@@ -236,30 +250,41 @@ def plot_all(datasets, sarsa):
     plt.close()
 
 def main():
+    # # (0.2, 0.9995, 0.9, 15, 0.00031, 0.01, 0.9995, 0.999, False),
+    # # # (0.2, 0.9995, 0.9, 17, 0.00031, 0.01, 0.9995, 0.999, False),
+    # # (0.5, 0.9995, 0.9, 17, 0.0003, 0.01, 0.999, 0.999, True),
+    # # #     (0.5, 0.9995, 0.9, 17, 0.00005, 0.01, 0.999, 0.999, True),
+    # # #     (0.5, 0.9995, 0.9, 17, 0.00031, 0.01, 0.9995, 0.999, True),
+    #
+    # # (0.2, 0.9995, 0.9, 15, 0.00031, 0.01, 0.9995, 0.999, False),
+    # # (0.5, 0.9995, 0.9, 17, 0.0003, 0.01, 0.999, 0.999, True),
+    # (0.2, 0.9995, 0.9, 15, 0.00031, 0.0102, 0.9995, 0.995, False),
+    # (0.5, 0.9995, 0.9, 17, 0.0003, 0.0102, 0.999, 0.995, True),
+    # (0.2, 0.9995, 0.9, 15, 0.000051, 0.01, 0.9995, 0.999, False),
+    # (0.5, 0.9995, 0.9, 17, 0.00005, 0.01, 0.999, 0.999, True),
+    # (0.2, 0.9995, 0.9, 15, 0.00031, 0.01, 0.9995, 0.999, False),
+    # (0.5, 0.9995, 0.9, 17, 0.0003, 0.01, 0.999, 0.999, True),
+    # (0.2, 0.9995, 0.9, 15, 0.000051, 0.00301, 0.9995, 0.999, False),
+    # (0.5, 0.9995, 0.9, 17, 0.00005, 0.00301, 0.999, 0.999, True),
+
     param_sets = [
-
-        # (0.001, 1.0, 0.995, 5, 0.05, 0.01, 0.999, 0.999, True),
-        # (0.05, 1.0, 0.9, 7, 0.05, 0.01, 0.999, 0.999, True),
-        # (0.05, 1.0, 0.9, 11, 0.05, 0.01, 0.999, 0.999, False),
-        (0.05, 0.995, 0.9, 7, 0.05, 0.01, 0.999, 0.999, True),
-        (0.1, 0.995, 0.9, 7, 0.1, 0.01, 0.999, 0.999, True),
-        (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999, True),
-        (0.2, 0.995, 0.9, 11, 0.2, 0.01, 0.999, 0.999, True),
-        (0.2, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999, True),
-        (0.5, 0.995, 0.9, 5, 0.001, 0.01, 0.999, 0.999, True),
-        (0.5, 0.995, 0.9, 7, 0.001, 0.01, 0.999, 0.999, True),
-        (0.5, 0.995, 0.9, 11, 0.001, 0.01, 0.999, 0.999, True),
-
-        (0.5, 0.95, 0.9, 7, 0.001, 0.01, 0.999, 0.999, True),
-        (0.5, 1, 0.9, 7, 0.001, 0.01, 0.999, 0.999, True),
-
-        (0.2, 0.995, 0.9, 7, 0.2, 0.01, 0.999, 0.999, False),
+        (0.2, 0.9995, 0.9, 15, 0.00031, 0.0102, 0.9995, 0.995, False),
+        (0.5, 0.9995, 0.9, 17, 0.0003, 0.0102, 0.999, 0.995, True),
+        (0.2, 0.9995, 0.9, 15, 0.00031, 0.01021, 0.9995, 0.99, False),
+        (0.5, 0.9995, 0.9, 17, 0.0003, 0.01021, 0.999, 0.99, True),
+        (0.2, 0.9995, 0.9, 15, 0.00031, 0.01022, 0.9995, 0.95, False),
+        (0.5, 0.9995, 0.9, 17, 0.0003, 0.01022, 0.999, 0.95, True),
+        (0.2, 0.9995, 0.9, 15, 0.00031, 0.0502, 0.9995, 0.995, False),
+        (0.5, 0.9995, 0.9, 17, 0.0003, 0.0502, 0.999, 0.995, True),
+        (0.2, 0.9995, 0.5, 15, 0.00031, 0.0102, 0.9995, 0.995, False),
+        (0.5, 0.9995, 0.5, 17, 0.0003, 0.0102, 0.999, 0.995, True),
     ]
 
-    print("Write anything to generate data")
-    print(input())
-    for lr, df, er, b, lr_min, er_min, lr_decay, er_decay, sarsa in param_sets:
-        gen_data(3, lr, df, er, b, lr_min, er_min, lr_decay, er_decay, sarsa)
+
+    # print("Write anything to generate data")
+    # print(input())
+    # for lr, df, er, b, lr_min, er_min, lr_decay, er_decay, sarsa in param_sets:
+    #     gen_data(4, lr, df, er, b, lr_min, er_min, lr_decay, er_decay, sarsa)
 
     datasets = []
     for lr, df, er, b, lr_min, er_min, lr_decay, er_decay, sarsa in param_sets:
